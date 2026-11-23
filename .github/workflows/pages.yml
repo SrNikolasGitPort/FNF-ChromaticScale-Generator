@@ -22,7 +22,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - run: sudo apt-get install -y ffmpeg
       - run: node tests/dsp.test.js
+      - run: node tests/psola.test.js
+      - run: node tests/dwp.test.js
 
   deploy:
     needs: test

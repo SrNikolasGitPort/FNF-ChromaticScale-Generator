@@ -58,3 +58,10 @@ select{background:var(--card2);color:var(--txt);border:1px solid var(--line);bor
 footer{text-align:center;color:var(--mut);padding:0 16px 28px;font-size:.85rem}
 footer a{color:var(--acc)}
 [hidden]{display:none!important}
+
+.drop b{display:block;color:var(--txt);font-size:1.1rem;margin-bottom:6px}
+.drop span{font-size:.9rem;line-height:1.5}
+.btn small{font-weight:400;opacity:.85}
+.btn.alt{background:var(--card2);border:1px solid var(--line)}
+.ok{padding:10px 12px;border-radius:10px;background:#12301f;color:var(--ok);font-size:.9rem;margin-top:12px}
+.dl{margin-bottom:6px}

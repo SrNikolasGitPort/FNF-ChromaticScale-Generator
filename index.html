@@ -10,136 +10,36 @@
 <body>
 <header class="top">
   <h1>FNF <span>Chromatic</span> Scale Generator</h1>
-  <p>Envie uma voz e gere uma escala cromática afinada, pronta pro FL Studio (Mobile ou PC). Tudo roda no seu navegador — nenhum áudio é enviado pra servidor.</p>
+  <p>Envie sua voz e receba uma chromatic completa (C0 a B9), pronta pro FL Studio Mobile ou PC.</p>
 </header>
 
 <main>
-  <!-- 1. Fonte -->
-  <section class="card" id="s-source">
-    <h2><b>1</b> Fonte de áudio</h2>
-    <div class="tabs" role="tablist">
-      <button class="tab on" data-mode="single" role="tab">Áudio único</button>
-      <button class="tab" data-mode="parts" role="tab">Partes separadas</button>
-    </div>
-
-    <div id="mode-single">
-      <p class="hint">Envie sua voz falando qualquer coisa <u>ou</u> uma chromatic scale já gravada. O Auto-Corte acha os trechos vozeados e estáveis e mede o tom de cada um.</p>
-      <label class="drop" id="drop-single">
-        <input type="file" id="file-single" accept="audio/*">
-        <span id="drop-single-t">Toque para escolher um áudio (WAV, MP3, OGG, M4A…)</span>
-      </label>
-      <div class="row">
-        <label>Sensibilidade
-          <select id="sens">
-            <option value="strict">Rigorosa (só trechos bem limpos)</option>
-            <option value="normal" selected>Normal</option>
-            <option value="loose">Permissiva (voz ruidosa)</option>
-          </select>
-        </label>
-        <label>Duração mínima do trecho
-          <select id="mindur">
-            <option value="0.06">60 ms</option>
-            <option value="0.09" selected>90 ms</option>
-            <option value="0.15">150 ms</option>
-            <option value="0.25">250 ms</option>
-          </select>
-        </label>
-        <button class="btn ghost" id="btn-reanalyze" disabled>Reanalisar</button>
-      </div>
-    </div>
-
-    <div id="mode-parts" hidden>
-      <p class="hint">Envie vários arquivos de voz (um por nota/sílaba). Cada arquivo vira uma fonte; o tom é medido automaticamente e você pode corrigir manualmente.</p>
-      <label class="drop" id="drop-parts">
-        <input type="file" id="file-parts" accept="audio/*" multiple>
-        <span>Toque para escolher vários áudios</span>
-      </label>
-    </div>
-
-    <div class="progress" id="prog-analyze" hidden><i></i><span></span></div>
-    <div id="waveWrap" hidden><canvas id="wave" height="110"></canvas></div>
-    <div id="segs"></div>
+  <section class="card" id="s-upload">
+    <label class="drop" id="drop">
+      <input type="file" id="files" accept="audio/*" multiple>
+      <b>Toque para enviar sua voz</b>
+      <span id="drop-hint">Envie <u>1 áudio</u> (você falando qualquer coisa) — o site recorta as melhores partes.<br>
+      Ou envie <u>vários áudios</u> — cada um vira uma nota, em ordem do mais grave ao mais agudo.</span>
+    </label>
+    <div class="progress" id="prog" hidden><i></i><span></span></div>
+    <div id="info"></div>
   </section>
 
-  <!-- 2. Teclado -->
-  <section class="card" id="s-range">
-    <h2><b>2</b> Teclado a cobrir</h2>
-    <div class="row">
-      <label>Faixa
-        <select id="preset">
-          <option value="0,119" selected>Teclado completo</option>
-          <option value="12,108">Faixa audível ampla</option>
-          <option value="24,96">Faixa média</option>
-          <option value="36,84">3 oitavas centrais</option>
-          <option value="custom">Personalizada…</option>
-        </select>
-      </label>
-      <label>Convenção de oitava
-        <select id="octmode">
-          <option value="fl" selected>FL Studio (C5 = nota do meio)</option>
-          <option value="std">Padrão MIDI (C4 = nota do meio)</option>
-        </select>
-      </label>
-    </div>
-    <div class="row" id="custom-range" hidden>
-      <label>De <select id="lo"></select></label>
-      <label>Até <select id="hi"></select></label>
-    </div>
-    <p class="hint" id="range-info"></p>
-  </section>
-
-  <!-- 3. Saída -->
-  <section class="card" id="s-out">
-    <h2><b>3</b> Qualidade e saída</h2>
-    <div class="row">
-      <label>Duração de cada nota
-        <select id="notelen">
-          <option value="0.5">0,5 s</option>
-          <option value="1" selected>1 s</option>
-          <option value="1.5">1,5 s</option>
-          <option value="2">2 s</option>
-          <option value="3">3 s</option>
-        </select>
-      </label>
-      <label>Taxa de amostragem
-        <select id="outsr"><option value="44100" selected>44,1 kHz</option><option value="48000">48 kHz</option></select>
-      </label>
-      <label>Bits
-        <select id="bits"><option value="16" selected>16 bits</option><option value="24">24 bits</option></select>
-      </label>
-    </div>
-    <div class="row">
-      <label>Escolha da fonte por tecla
-        <select id="pickmode">
-          <option value="nearest" selected>Mais próxima do tom (menos transposição)</option>
-          <option value="best">Sempre a melhor fonte (timbre uniforme)</option>
-        </select>
-      </label>
-      <label>Silêncio entre notas (WAV único)
-        <select id="gap"><option value="0">Nenhum</option><option value="0.1" selected>100 ms</option><option value="0.25">250 ms</option></select>
-      </label>
-      <label class="chk"><input type="checkbox" id="norm" checked> Igualar volume entre as notas</label>
-    </div>
-    <button class="btn" id="btn-gen" disabled>Gerar Chromatic</button>
-    <div class="progress" id="prog-gen" hidden><i></i><span></span></div>
-  </section>
-
-  <!-- 4. Resultado -->
   <section class="card" id="s-result" hidden>
-    <h2><b>4</b> Resultado</h2>
     <div class="stats" id="stats"></div>
     <div class="dl">
-      <button class="btn" id="dl-wav">⬇ WAV único (todas as notas)</button>
-      <button class="btn" id="dl-zip">⬇ ZIP: WAV por tecla + SFZ</button>
+      <button class="btn" id="dl-dwp">⬇ Baixar DWP <small>(FL Studio Mobile e PC)</small></button>
+      <button class="btn alt" id="dl-wav">⬇ Baixar WAV</button>
+      <button class="btn alt" id="dl-zip">⬇ Baixar ZIP <small>(um WAV por tecla + SFZ)</small></button>
     </div>
     <p class="hint">Teste ao vivo — toque nas teclas (role para os lados para ver todas):</p>
     <div class="kb" id="kb"></div>
     <details class="help">
-      <summary>Como usar no FL Studio</summary>
+      <summary>Como instalar no FL Studio</summary>
       <ul>
-        <li><b>FL Studio Mobile:</b> abra um <i>Sampler/Slicer</i>, importe o <b>WAV único</b> e use o fatiamento por marcadores (os pontos de corte já vêm gravados no arquivo, um por nota), ou importe os WAVs do ZIP um por tecla.</li>
-        <li><b>FL Studio PC:</b> descompacte o ZIP e abra o arquivo <b>.sfz</b> no <i>DirectWave</i> — cada tecla já vem mapeada. Depois pode salvar como <code>.dwp</code> pelo próprio DirectWave. Alternativa: arraste os WAVs para o <i>Sampler</i> e defina a nota-raiz de cada um.</li>
-        <li>Cada nota é gerada <b>no tom exato</b> da tecla indicada no nome (convenção de oitava escolhida no passo 2).</li>
+        <li><b>FL Studio Mobile:</b> baixe o <b>DWP</b> no celular, abra o arquivo baixado e escolha <i>FL Studio</i> (ou copie para <code>My Instruments</code>). No DirectWave, abra o seletor de presets e escolha "Chromatic_Voz".</li>
+        <li><b>FL Studio PC:</b> abra o <b>DWP</b> direto no DirectWave (menu de arquivos do plugin).</li>
+        <li><b>WAV:</b> um arquivo só com todas as notas em sequência, com marcadores de corte por nota.</li>
       </ul>
     </details>
   </section>
@@ -148,6 +48,8 @@
 <footer>Feito para a comunidade de FNF · <a href="https://github.com/SrNikolasGitPort/FNF-ChromaticScale-Generator">GitHub</a></footer>
 
 <script src="js/dsp.js"></script>
+<script src="js/flac.js"></script>
+<script src="js/dwp.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

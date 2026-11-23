@@ -1,34 +1,43 @@
 # FNF Chromatic Scale Generator
 
-Site que gera uma **Chromatic Scale completa e afinada** para usar em músicas de FNF, a partir da sua própria voz.
-Roda 100% no navegador (celular ou PC): nenhum áudio sai do seu aparelho.
+Envie sua voz e receba uma **chromatic completa (C0 a B9)**, afinada e pronta para o FL Studio Mobile ou PC.
+Roda 100% no navegador: nenhum áudio sai do seu aparelho.
 
-## Como funciona
+## Como usar
 
-1. **Fonte de áudio**
-   - **Áudio único**: envie sua voz falando qualquer coisa *ou* uma chromatic scale já gravada. O **Auto-Corte** rastreia o tom (algoritmo YIN), acha trechos vozeados e estáveis, corta em cruzamento por zero e mede o tom de cada um com precisão de fração de cent.
-   - **Partes separadas**: envie vários arquivos (um por nota/sílaba). O tom é medido automaticamente e pode ser corrigido na mão.
-2. **Teclado**: escolha a faixa (padrão: teclado completo, C0–B9 na convenção do FL Studio, MIDI 0–119) e a convenção de oitava (FL Studio ou MIDI padrão).
-3. **Saída**: cada tecla é reamostrada (sinc janelado) até o tom exato e estendida com *loop* de fase casada, sem cliques, para a duração escolhida. Os volumes são igualados.
+- **1 áudio** (você falando qualquer coisa): o site recorta as melhores partes (trechos com tom estável) e monta a chromatic com elas.
+- **Vários áudios**: cada áudio vira uma nota, **em ordem do mais grave ao mais agudo**. Todos os áudios com tom são usados; se dois caírem na mesma nota, o seguinte vai para a próxima tecla livre. Áudios sem tom (ruído) são ignorados, com aviso.
 
-## Exportação
+Depois é só baixar:
 
-- **WAV único** com todas as notas em sequência e marcadores (`cue`) com o nome de cada nota — para fatiar no sampler do FL Studio Mobile.
-- **ZIP** com um WAV por tecla (`NNN_Nota.wav`, nota-raiz gravada no `smpl`) + `chromatic.sfz` com cada tecla já mapeada. O DirectWave (FL Studio PC) abre `.sfz` e pode salvar como `.dwp`.
+| Arquivo | Para quê |
+|---|---|
+| **DWP** | Instrumento do DirectWave (FL Studio Mobile e PC), uma tecla por nota |
+| **WAV** | Todas as notas em sequência, com marcadores de corte por nota |
+| **ZIP** | Um WAV por tecla + `chromatic.sfz` mapeado |
 
-> O formato `.dwp` é proprietário e fechado, então o site não o grava diretamente; o `.sfz` é o caminho aberto equivalente.
+## Como a voz é estendida
 
-## Rodar localmente
+Cada tecla é gerada por **PSOLA**, que muda o tom sem deformar o timbre da voz (os formantes ficam onde estão, sem efeito "esquilo"). A nota é prolongada reaproveitando os ciclos da própria voz, sem emendas nem cliques. Para tons muito distantes da voz original (mais de 1 oitava), o restante é feito por reamostragem. As notas ficam afinadas ao cent: nos testes, erro < 1 cent nas 120 teclas.
+
+## Testes
 
 ```bash
-python3 -m http.server 8000   # e abra http://localhost:8000
-node tests/dsp.test.js        # testes de precisão do núcleo de áudio
+node tests/dsp.test.js     # detecção de tom, Auto-Corte, WAV/ZIP
+node tests/psola.test.js   # afinação das 120 teclas, formantes, ordem das partes
+node tests/dwp.test.js     # estrutura do DWP + FLAC embutido (precisa do ffmpeg)
 ```
 
-Sem dependências nem build: HTML + CSS + JS puro (`js/dsp.js` é o núcleo, `js/app.js` a interface).
+Sem dependências nem build: HTML + CSS + JS puro.
 
-## Dicas para um resultado melhor
+## Observação sobre o DWP
 
-- Grave vogais **sustentadas e sem vibrato** ("aaaa", "oooo") em tons diferentes, com pouco ruído de fundo.
-- Quanto mais fontes em alturas variadas, menos as notas extremas soam "estiradas".
-- Se o Auto-Corte não achar nada, use a sensibilidade **Permissiva** ou reduza a duração mínima.
+O formato `.dwp` é fechado; este site o escreve seguindo a engenharia reversa do projeto
+[ConvertWithMoss](https://github.com/git-moss/ConvertWithMoss) (Jürgen Moßgraber). `js/dwp.js` é um port desse código
+e, por isso, é distribuído sob a **LGPL v3**. O arquivo é validado estruturalmente e o áudio embutido é decodificado
+bit a bit nos testes, mas a abertura no FL Studio em si deve ser conferida no seu aparelho.
+
+## Dicas
+
+- Grave vogais **sustentadas e limpas** ("aaaa", "oooo"), com pouco ruído de fundo.
+- Quanto mais partes em alturas diferentes, mais natural fica nas notas extremas.

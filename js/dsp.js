@@ -295,20 +295,97 @@
     return out;
   }
 
+
+  /* ------------------------------------------------------------------ */
+  /* PSOLA: muda o tom preservando o timbre (formantes) da voz            */
+  /* ------------------------------------------------------------------ */
+  const OS = 4; // super-amostragem: reduz o "tremor" de posicionamento dos grãos
+
+  /** Sobe a fonte 4x e acha as marcas de pitch (um grão por ciclo, por correlação). */
+  function prepareSource(src) {
+    if (src._prep !== undefined) return src._prep;
+    src._prep = null;
+    const seg = src.data.subarray(src.a, src.b);
+    const n = seg.length;
+    if (n < 64 || !(src.f0 > 0)) return null;
+    const up = resample(seg, 0, 1 / OS, (n - 1) * OS);
+    const T0 = (OS * src.sr) / src.f0;
+    const len = Math.round(T0), half = Math.round(T0 / 2), rad = Math.max(2, Math.round(T0 * 0.15));
+    const need = Math.round(T0 * 1.25);
+    let m = Math.round(T0 * 1.2), best = -Infinity, anchor = m;
+    for (let i = m; i < Math.min(up.length - need, m + len); i++) if (up[i] > best) { best = up[i]; anchor = i; }
+    const marks = [anchor];
+    for (;;) {
+      const cur = marks[marks.length - 1];
+      const pred = cur + len;
+      if (pred + rad + need > up.length) break;
+      let bc = -Infinity, bm = pred;
+      for (let c = pred - rad; c <= pred + rad; c++) {
+        let sxy = 0, syy = 0;
+        for (let i = -half; i < half; i += 2) {
+          const a = up[cur + i], b = up[c + i];
+          sxy += a * b; syy += b * b;
+        }
+        const corr = sxy / (Math.sqrt(syy) + 1e-9);
+        if (corr > bc) { bc = corr; bm = c; }
+      }
+      marks.push(bm);
+    }
+    if (marks.length < 3) return null;
+    const per = marks.map((v, k) => (k + 1 < marks.length ? marks[k + 1] - v : marks[k] - marks[k - 1]));
+    return (src._prep = { up, marks, per, T0 });
+  }
+
+  /** Sintetiza com período Tt (na grade super-amostrada) por Ly amostras. */
+  function psolaSynth(prep, Tt, Ly) {
+    const { up, marks, per } = prep;
+    const K = marks.length, cyc = 2 * (K - 1), rate = 0.5;
+    const out = new Float32Array(Ly);
+    for (let j = 0; ; j++) {
+      const t = Math.round(Tt + j * Tt);
+      const ph = (j * rate) % cyc;
+      const k = Math.round(ph <= K - 1 ? ph : cyc - ph);
+      const P = per[k], m = marks[k];
+      if (t - P >= Ly) break;
+      const g = Tt / P;
+      const i0 = Math.max(-P, -t), i1 = Math.min(P, Ly - t);
+      for (let i = i0; i < i1; i++) out[t + i] += up[m + i] * (0.5 + 0.5 * Math.cos((Math.PI * i) / P)) * g;
+    }
+    return out;
+  }
+
+  function psolaNote(src, targetF, o) {
+    const prep = prepareSource(src);
+    if (!prep) return null;
+    const r1 = Math.min(2, Math.max(0.5, targetF / src.f0)); // parte feita por PSOLA (±1 oitava)
+    const f1 = src.f0 * r1;
+    const Tt = (OS * src.sr) / f1;
+    const s = (targetF / f1) * ((OS * src.sr) / o.outSr); // resto, por reamostragem
+    const N = Math.round(o.noteLen * o.outSr);
+    const Ly = Math.ceil((N - 1) * s + ZC * Math.max(1, s) + 4 * Tt + 8);
+    const y = psolaSynth(prep, Tt, Ly);
+    // descarta o 1º ciclo (ainda sem sobreposição completa) e reamostra
+    const start = Math.round(2 * Tt);
+    return resample(y, start, s, N);
+  }
+
   /**
    * Gera uma nota a partir de uma fonte.
    * src: { data (mono completo), a, b, f0, sr }   alvo: número MIDI
    */
   function makeNote(src, targetMidi, o) {
     const targetF = midiToFreq(targetMidi);
-    const step = (targetF / src.f0) * (src.sr / o.outSr);
     const N = Math.round(o.noteLen * o.outSr);
-    const Lfull = Math.floor((src.b - src.a - 1) / step);
-    const Lout = Math.max(8, Math.min(Lfull, N));
-    let out = resample(src.data, src.a, step, Lout);
-    if (Lout < N) out = extendLoop(out, o.outSr / targetF, N, o.outSr);
+    let out = o.psola === false ? null : psolaNote(src, targetF, o);
+    if (!out) {
+      const step = (targetF / src.f0) * (src.sr / o.outSr);
+      const Lfull = Math.floor((src.b - src.a - 1) / step);
+      const Lout = Math.max(8, Math.min(Lfull, N));
+      out = resample(src.data, src.a, step, Lout);
+      if (Lout < N) out = extendLoop(out, o.outSr / targetF, N, o.outSr);
+    }
     const fin = Math.min(Math.round(0.003 * o.outSr), N >> 2);
-    const fout = Math.min(Math.round(0.03 * o.outSr), N >> 1);
+    const fout = Math.min(Math.round(0.06 * o.outSr), N >> 1);
     for (let i = 0; i < fin; i++) out[i] *= 0.5 - 0.5 * Math.cos((Math.PI * i) / fin);
     for (let i = 0; i < fout; i++) out[N - 1 - i] *= 0.5 - 0.5 * Math.cos((Math.PI * i) / fout);
     return out;
@@ -323,10 +400,28 @@
     }
     let best = null, bc = Infinity;
     for (const s of pool) {
-      const cost = Math.abs(s.midi - midi) + 0.75 * (1 - (s.scoreNorm == null ? 1 : s.scoreNorm));
+      const cost = Math.abs((s.anchor != null ? s.anchor : s.midi) - midi) + 0.75 * (1 - (s.scoreNorm == null ? 1 : s.scoreNorm));
       if (cost < bc) { bc = cost; best = s; }
     }
     return best;
+  }
+
+
+  /**
+   * Partes separadas: cada áudio recebe uma nota própria, em ordem de tom.
+   * Dois áudios no mesmo tom: o seguinte vai para a próxima tecla livre acima.
+   */
+  function planParts(srcs) {
+    const sorted = srcs.slice().sort((a, b) => a.midi - b.midi);
+    const used = new Set();
+    for (const s of sorted) {
+      let m = Math.max(0, Math.min(127, Math.round(s.midi)));
+      while (used.has(m) && m < 127) m++;
+      while (used.has(m) && m > 0) m--;
+      s.anchor = m;
+      used.add(m);
+    }
+    return sorted;
   }
 
   /** Gera todas as notas de lo..hi (inclusive). */
@@ -548,7 +643,7 @@
 
   return {
     NOTE_NAMES, midiToFreq, freqToMidi, noteName, yin, refineF0, analyzeTrack, findSegments,
-    resample, extendLoop, makeNote, pickSource, generateAll, normalizeNotes,
+    resample, extendLoop, makeNote, psolaNote, prepareSource, planParts, pickSource, generateAll, normalizeNotes,
     encodeWav, buildScaleWav, buildZip, buildSfz, crc32, rms, median,
   };
 });
